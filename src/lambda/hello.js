@@ -1,11 +1,14 @@
+require("dotenv").config();
+
 // show object spread works, i.e. babel works
 const obj = {
-  foo: 'bar'
+  foo: "bar"
 };
-export function handler(event, context, callback) {
-  console.log('queryStringParameters', event.queryStringParameters);
-  callback(null, {
+export async function handler(event, context) {
+  console.log(process.env.TEST);
+  console.log("queryStringParameters", event.queryStringParameters);
+  return {
     statusCode: 200,
-    body: JSON.stringify({ msg: 'Hello, World!', ...obj })
-  });
+    body: JSON.stringify({ msg: process.env.TEST, ...obj })
+  };
 }
