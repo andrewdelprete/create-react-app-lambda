@@ -1,4 +1,4 @@
-import _ from "lodash";
+import { flatten } from "lodash";
 require("dotenv").config();
 var Airtable = require("airtable");
 
@@ -6,18 +6,24 @@ var base = new Airtable({ apiKey: "keyO8ujECCZ8EPykr" }).base("appenjpG5GSATPlz0
 
 export async function handler(event, context) {
   try {
-    let events = await getTable({ maxRecords: 5, table: "events" });
-    const eventsIds = Object.values(events).map(e => e.fields.id);
+    let events = await getTable({
+      fields: ["date", "status", "event_type_id", "sessions"],
+      filterByFormula: `IS_AFTER(DATETIME_PARSE(date), DATETIME_PARSE('01-01-${new Date().getFullYear()}'))`,
+      table: "events"
+    });
+    const sessionIds = flatten(events.map(e => e.fields.sessions));
 
     const sessions = await getTable({
-      filterByFormula: `OR(${buildFieldIdstring("event_id", eventsIds)})`,
+      fields: ["event_id", "time", "status", "reservations_count"],
+      filterByFormula: `OR(${buildFieldIdstring(sessionIds)})`,
       table: "sessions"
     });
 
-    events = Object.values(events).map(e => ({
-      ...e,
-      sessions: sessions[e.fields.sessions[0]]
-    }));
+    // Replace sessions ref IDs with actual expanded session objects
+    events = events.map(e => {
+      e.fields.sessions = sessions.filter(s => s.fields.event_id[0] === e.id);
+      return e;
+    });
 
     return { statusCode: 200, body: JSON.stringify(events) };
   } catch (err) {
@@ -25,9 +31,9 @@ export async function handler(event, context) {
   }
 }
 
-function buildFieldIdstring(fieldId, recordArr) {
+function buildFieldIdstring(recordArr) {
   return `${recordArr
-    .map(record => `event_id = '${record}',`)
+    .map(record => `RECORD_ID() = '${record}',`)
     .join("")
     .slice(0, -1)}`;
 }
@@ -44,9 +50,5 @@ export async function getTable({ table, ...options }) {
       fetchNextPage();
     });
 
-  return results.reduce((result, item, index, array) => {
-    result[item.id] = item;
-    delete result[item.id].id;
-    return result;
-  }, {});
+  return results;
 }
